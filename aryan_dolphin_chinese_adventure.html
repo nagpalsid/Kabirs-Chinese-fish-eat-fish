@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>海豚汉字冒险 Dolphin Chinese Adventure</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#001a1a; font-family:'Segoe UI',Arial,sans-serif; overflow:hidden; user-select:none; }
+#gameCanvas { display:block; }
+#ui { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+#hud { position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; align-items:flex-start; }
+#score-box { background:rgba(0,50,50,0.88); border:2px solid #00e5cc; border-radius:12px; padding:8px 16px; color:#fff; }
+#score-label { font-size:11px; color:#00e5cc; letter-spacing:1px; text-transform:uppercase; }
+#score-val { font-size:28px; font-weight:bold; color:#fff; line-height:1; }
+#level-box { background:rgba(0,50,50,0.88); border:2px solid #ffb347; border-radius:12px; padding:8px 16px; color:#fff; text-align:center; }
+#level-label { font-size:11px; color:#ffb347; letter-spacing:1px; }
+#level-val { font-size:22px; font-weight:bold; color:#ffb347; }
+#lives-box { background:rgba(0,50,50,0.88); border:2px solid #ff6b9d; border-radius:12px; padding:8px 16px; color:#fff; text-align:right; }
+#lives-label { font-size:11px; color:#ff6b9d; letter-spacing:1px; }
+#lives-val { font-size:22px; }
+#size-bar-wrap { position:absolute; left:50%; transform:translateX(-50%); top:10px; width:180px; background:rgba(0,50,50,0.7); border:1px solid #00e5cc; border-radius:8px; height:12px; overflow:hidden; }
+#size-bar { height:100%; background:linear-gradient(90deg,#00e5cc,#00ff88); border-radius:8px; transition:width 0.3s; }
+#word-panel { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,40,40,0.94); border:2px solid #00e5cc; border-radius:16px; padding:12px 28px; text-align:center; min-width:280px; max-width:420px; }
+#target-char { font-size:54px; color:#fff; line-height:1; }
+#target-pinyin { font-size:16px; color:#7fffee; margin-top:2px; }
+#target-meaning { font-size:13px; color:#aaa; margin-top:3px; }
+#target-instruction { font-size:12px; color:#ffb347; margin-top:6px; }
+#feedback-popup { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:rgba(0,35,35,0.97); border-radius:18px; padding:22px 32px; text-align:center; min-width:300px; max-width:460px; opacity:0; pointer-events:none; transition:opacity 0.25s; z-index:50; }
+#feedback-popup.correct { border:3px solid #00ff88; }
+#feedback-popup.wrong { border:3px solid #ff4444; }
+#fp-result { font-size:28px; margin-bottom:8px; }
+#fp-word-cards { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:10px 0 4px; }
+.fp-card { background:rgba(255,255,255,0.07); border-radius:12px; padding:10px 16px; text-align:center; min-width:90px; }
+.fp-card.eaten { border:2px solid #00e5cc; }
+.fp-card.target { border:2px solid #ffb347; }
+.fp-card.correct-ans { border:2px solid #00ff88; }
+.fp-card-label { font-size:10px; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; opacity:0.7; }
+.fp-card.eaten .fp-card-label { color:#00e5cc; }
+.fp-card.target .fp-card-label { color:#ffb347; }
+.fp-card.correct-ans .fp-card-label { color:#00ff88; }
+.fp-card-char { font-size:38px; color:#fff; line-height:1.1; }
+.fp-card-pinyin { font-size:13px; color:#7fffee; margin-top:3px; font-style:italic; }
+.fp-card.target .fp-card-pinyin { color:#ffe580; }
+.fp-card.correct-ans .fp-card-pinyin { color:#88ffcc; }
+.fp-card-meaning { font-size:12px; color:#bbb; margin-top:4px; }
+#fp-relation { font-size:13px; margin-top:12px; padding:8px 12px; border-radius:8px; line-height:1.6; }
+#feedback-popup.correct #fp-relation { background:rgba(0,80,50,0.6); color:#88ffcc; }
+#feedback-popup.wrong #fp-relation { background:rgba(80,0,0,0.6); color:#ffaaaa; }
+#streak-notice { position:absolute; top:44%; left:50%; transform:translate(-50%,-50%); font-size:30px; font-weight:bold; color:#ffb347; text-shadow:0 0 20px #ffb347; opacity:0; pointer-events:none; transition:opacity 0.3s; }
+#overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,25,25,0.93); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100; pointer-events:all; overflow-y:auto; padding:20px 10px; }
+#overlay h1 { font-size:40px; color:#00e5cc; text-shadow:0 0 30px #00e5cc; margin-bottom:6px; }
+#overlay .subtitle { font-size:17px; color:#7fffee; margin-bottom:24px; }
+.big-btn { background:linear-gradient(135deg,#006655,#00e5cc); border:none; border-radius:14px; color:#fff; font-size:19px; font-weight:bold; padding:14px 44px; cursor:pointer; margin:6px; transition:transform 0.1s,box-shadow 0.1s; box-shadow:0 4px 20px rgba(0,229,204,0.4); pointer-events:all; }
+.big-btn:hover { transform:translateY(-2px); box-shadow:0 6px 28px rgba(0,229,204,0.6); }
+.big-btn.secondary { background:rgba(0,60,60,0.9); box-shadow:none; }
+#level-select { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:18px; }
+.lv-btn { background:rgba(0,60,60,0.9); border:2px solid #00e5cc; border-radius:12px; color:#7fffee; font-size:14px; padding:10px 18px; cursor:pointer; pointer-events:all; transition:all 0.2s; text-align:center; min-width:100px; }
+.lv-btn:hover, .lv-btn.active { background:#00e5cc; color:#003333; }
+#creature-display { font-size:80px; margin:8px 0; }
+#overlay-msg { font-size:17px; color:#b2ffe8; margin:8px 0 18px; text-align:center; max-width:480px; line-height:1.6; }
+.dolphin-reward { font-size:60px; animation:bobble 1s infinite alternate; display:inline-block; }
+@keyframes bobble { from{transform:translateY(0) rotate(-5deg);} to{transform:translateY(-10px) rotate(5deg);} }
+#progress-label { font-size:12px; color:#ffb347; text-align:center; margin-bottom:4px; }
+#progress-bar-wrap { width:280px; background:rgba(0,50,50,0.7); border:2px solid #ffb347; border-radius:10px; height:16px; overflow:hidden; margin:6px auto 18px; }
+#progress-bar { height:100%; background:linear-gradient(90deg,#ffb347,#ff6b00); border-radius:10px; transition:width 0.5s; }
+#high-score-display { color:#7fffee; font-size:13px; margin-top:10px; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div id="hud">
+    <div id="score-box"><div id="score-label">Score</div><div id="score-val">0</div></div>
+    <div id="level-box"><div id="level-label">Level</div><div id="level-val">1</div></div>
+    <div id="lives-box"><div id="lives-label">Lives</div><div id="lives-val">❤️❤️❤️</div></div>
+  </div>
+  <div id="size-bar-wrap"><div id="size-bar" style="width:30%"></div></div>
+  <div id="word-panel" style="display:none">
+    <div id="target-char">-</div>
+    <div id="target-pinyin"></div>
+    <div id="target-meaning"></div>
+    <div id="target-instruction">🐬 Swim to the matching partner word!</div>
+  </div>
+  <div id="feedback-popup">
+    <div id="fp-result"></div>
+    <div id="fp-word-cards"></div>
+    <div id="fp-relation"></div>
+  </div>
+  <div id="streak-notice">🔥 Streak x<span id="streak-num">3</span>!</div>
+</div>
+
+<div id="overlay">
+  <div id="creature-display">🐬</div>
+  <h1>海豚汉字冒险</h1>
+  <div class="subtitle">Dolphin Chinese Adventure · P1–P3 · Aryan's Edition 🐬</div>
+  <div id="overlay-msg">Swim as Aryan's dolphin! Find the partner word that matches the character below. All bubbles look the same — think carefully!</div>
+  <div id="progress-label" style="display:none">Dolphin Journey Progress</div>
+  <div id="progress-bar-wrap" style="display:none"><div id="progress-bar" style="width:0%"></div></div>
+  <div id="level-select">
+    <div class="lv-btn active" data-level="1" onclick="selectLevel(1)">🐬 Level 1<br><small>P1 Basics</small></div>
+    <div class="lv-btn" data-level="2" onclick="selectLevel(2)">🐠 Level 2<br><small>P1 Advanced</small></div>
+    <div class="lv-btn" data-level="3" onclick="selectLevel(3)">🦀 Level 3<br><small>P2 Basics</small></div>
+    <div class="lv-btn" data-level="4" onclick="selectLevel(4)">🐙 Level 4<br><small>P2 Advanced</small></div>
+    <div class="lv-btn" data-level="5" onclick="selectLevel(5)">🦑 Level 5<br><small>P3 Basics</small></div>
+    <div class="lv-btn" data-level="6" onclick="selectLevel(6)">🌟 Level 6<br><small>P3 Master</small></div>
+  </div>
+  <button class="big-btn" onclick="startGame()">▶ Start Adventure!</button>
+  <div id="high-score-display"></div>
+</div>
+
+<script>
+const WORD_DATA = [{"char":"人","pinyin":"rén","meaning":"person/people","level":"1A","partners":[{"word":"人们","pinyin":"rén men","eng":"people"},{"word":"大人","pinyin":"dà rén","eng":"adult"},{"word":"人口","pinyin":"rén kǒu","eng":"population"}]},{"char":"我","pinyin":"wǒ","meaning":"I/me","level":"1A","partners":[{"word":"我们","pinyin":"wǒ men","eng":"we/us"},{"word":"自我","pinyin":"zì wǒ","eng":"self"}]},{"char":"你","pinyin":"nǐ","meaning":"you","level":"1A","partners":[{"word":"你们","pinyin":"nǐ men","eng":"you all"},{"word":"你好","pinyin":"nǐ hǎo","eng":"hello"}]},{"char":"他","pinyin":"tā","meaning":"he/him","level":"1A","partners":[{"word":"他们","pinyin":"tā men","eng":"they/them"},{"word":"他人","pinyin":"tā rén","eng":"others"}]},{"char":"她","pinyin":"tā","meaning":"she/her","level":"1A","partners":[{"word":"她们","pinyin":"tā men","eng":"they (female)"},{"word":"她的","pinyin":"tā de","eng":"her/hers"}]},{"char":"爸","pinyin":"bà","meaning":"dad","level":"1A","partners":[{"word":"爸爸","pinyin":"bà bà","eng":"dad/father"},{"word":"爸妈","pinyin":"bà mā","eng":"mum and dad"}]},{"char":"妈","pinyin":"mā","meaning":"mum","level":"1A","partners":[{"word":"妈妈","pinyin":"mā mā","eng":"mum/mother"}]},{"char":"哥","pinyin":"gē","meaning":"older brother","level":"1A","partners":[{"word":"哥哥","pinyin":"gē gē","eng":"older brother"},{"word":"大哥","pinyin":"dà gē","eng":"eldest brother"}]},{"char":"姐","pinyin":"jiě","meaning":"older sister","level":"1A","partners":[{"word":"姐姐","pinyin":"jiě jiě","eng":"older sister"},{"word":"大姐","pinyin":"dà jiě","eng":"eldest sister"}]},{"char":"弟","pinyin":"dì","meaning":"younger brother","level":"1A","partners":[{"word":"弟弟","pinyin":"dì dì","eng":"younger brother"},{"word":"兄弟","pinyin":"xiōng dì","eng":"brothers"}]},{"char":"妹","pinyin":"mèi","meaning":"younger sister","level":"1A","partners":[{"word":"妹妹","pinyin":"mèi mèi","eng":"younger sister"},{"word":"姐妹","pinyin":"jiě mèi","eng":"sisters"}]},{"char":"爷","pinyin":"yé","meaning":"grandpa","level":"1A","partners":[{"word":"爷爷","pinyin":"yé yé","eng":"grandpa"},{"word":"老爷","pinyin":"lǎo yé","eng":"grandfather"}]},{"char":"奶","pinyin":"nǎi","meaning":"grandma","level":"1A","partners":[{"word":"奶奶","pinyin":"nǎi nǎi","eng":"grandma"},{"word":"牛奶","pinyin":"niú nǎi","eng":"milk"}]},{"char":"家","pinyin":"jiā","meaning":"home/family","level":"1A","partners":[{"word":"家人","pinyin":"jiā rén","eng":"family members"},{"word":"回家","pinyin":"huí jiā","eng":"go home"},{"word":"家里","pinyin":"jiā lǐ","eng":"at home"}]},{"char":"一","pinyin":"yī","meaning":"one","level":"1A","partners":[{"word":"一起","pinyin":"yī qǐ","eng":"together"},{"word":"一样","pinyin":"yī yàng","eng":"same"},{"word":"第一","pinyin":"dì yī","eng":"first"}]},{"char":"二","pinyin":"èr","meaning":"two","level":"1A","partners":[{"word":"二月","pinyin":"èr yuè","eng":"February"},{"word":"第二","pinyin":"dì èr","eng":"second"}]},{"char":"三","pinyin":"sān","meaning":"three","level":"1A","partners":[{"word":"三月","pinyin":"sān yuè","eng":"March"},{"word":"第三","pinyin":"dì sān","eng":"third"}]},{"char":"四","pinyin":"sì","meaning":"four","level":"1A","partners":[{"word":"四月","pinyin":"sì yuè","eng":"April"},{"word":"四季","pinyin":"sì jì","eng":"four seasons"}]},{"char":"五","pinyin":"wǔ","meaning":"five","level":"1A","partners":[{"word":"五月","pinyin":"wǔ yuè","eng":"May"},{"word":"五官","pinyin":"wǔ guān","eng":"five senses"}]},{"char":"六","pinyin":"liù","meaning":"six","level":"1A","partners":[{"word":"六月","pinyin":"liù yuè","eng":"June"},{"word":"六岁","pinyin":"liù suì","eng":"six years old"}]},{"char":"七","pinyin":"qī","meaning":"seven","level":"1A","partners":[{"word":"七月","pinyin":"qī yuè","eng":"July"},{"word":"七天","pinyin":"qī tiān","eng":"seven days"}]},{"char":"八","pinyin":"bā","meaning":"eight","level":"1A","partners":[{"word":"八月","pinyin":"bā yuè","eng":"August"},{"word":"八岁","pinyin":"bā suì","eng":"eight years old"}]},{"char":"九","pinyin":"jiǔ","meaning":"nine","level":"1A","partners":[{"word":"九月","pinyin":"jiǔ yuè","eng":"September"},{"word":"九岁","pinyin":"jiǔ suì","eng":"nine years old"}]},{"char":"十","pinyin":"shí","meaning":"ten","level":"1A","partners":[{"word":"十月","pinyin":"shí yuè","eng":"October"},{"word":"十分","pinyin":"shí fēn","eng":"very/fully"}]},{"char":"吃","pinyin":"chī","meaning":"eat","level":"1A","partners":[{"word":"吃饭","pinyin":"chī fàn","eng":"eat a meal"},{"word":"吃东西","pinyin":"chī dōng xī","eng":"eat something"},{"word":"好吃","pinyin":"hǎo chī","eng":"delicious"}]},{"char":"喝","pinyin":"hē","meaning":"drink","level":"1A","partners":[{"word":"喝水","pinyin":"hē shuǐ","eng":"drink water"},{"word":"喝茶","pinyin":"hē chá","eng":"drink tea"}]},{"char":"看","pinyin":"kàn","meaning":"look/watch","level":"1A","partners":[{"word":"看书","pinyin":"kàn shū","eng":"read a book"},{"word":"看见","pinyin":"kàn jiàn","eng":"see/catch sight of"},{"word":"看病","pinyin":"kàn bìng","eng":"see a doctor"}]},{"char":"听","pinyin":"tīng","meaning":"listen","level":"1A","partners":[{"word":"听话","pinyin":"tīng huà","eng":"obedient"},{"word":"听到","pinyin":"tīng dào","eng":"hear"},{"word":"听音乐","pinyin":"tīng yīn lè","eng":"listen to music"}]},{"char":"说","pinyin":"shuō","meaning":"speak/say","level":"1A","partners":[{"word":"说话","pinyin":"shuō huà","eng":"speak/talk"},{"word":"说明","pinyin":"shuō míng","eng":"explain"},{"word":"说笑","pinyin":"shuō xiào","eng":"joke around"}]},{"char":"走","pinyin":"zǒu","meaning":"walk/go","level":"1A","partners":[{"word":"走路","pinyin":"zǒu lù","eng":"walk"},{"word":"走开","pinyin":"zǒu kāi","eng":"go away"},{"word":"行走","pinyin":"xíng zǒu","eng":"walk/travel"}]},{"char":"来","pinyin":"lái","meaning":"come","level":"1A","partners":[{"word":"来到","pinyin":"lái dào","eng":"arrive/come to"},{"word":"原来","pinyin":"yuán lái","eng":"originally"}]},{"char":"去","pinyin":"qù","meaning":"go","level":"1A","partners":[{"word":"出去","pinyin":"chū qù","eng":"go out"},{"word":"回去","pinyin":"huí qù","eng":"go back"}]},{"char":"做","pinyin":"zuò","meaning":"do/make","level":"1A","partners":[{"word":"做作业","pinyin":"zuò zuò yè","eng":"do homework"},{"word":"做饭","pinyin":"zuò fàn","eng":"cook"},{"word":"做到","pinyin":"zuò dào","eng":"achieve"}]},{"char":"玩","pinyin":"wán","meaning":"play","level":"1A","partners":[{"word":"玩具","pinyin":"wán jù","eng":"toy"},{"word":"玩耍","pinyin":"wán shuǎ","eng":"play/frolic"},{"word":"好玩","pinyin":"hǎo wán","eng":"fun"}]},{"char":"水","pinyin":"shuǐ","meaning":"water","level":"1A","partners":[{"word":"水果","pinyin":"shuǐ guǒ","eng":"fruit"},{"word":"喝水","pinyin":"hē shuǐ","eng":"drink water"}]},{"char":"书","pinyin":"shū","meaning":"book","level":"1A","partners":[{"word":"书包","pinyin":"shū bāo","eng":"school bag"},{"word":"看书","pinyin":"kàn shū","eng":"read a book"},{"word":"图书馆","pinyin":"tú shū guǎn","eng":"library"}]},{"char":"花","pinyin":"huā","meaning":"flower","level":"1A","partners":[{"word":"花园","pinyin":"huā yuán","eng":"garden"},{"word":"花朵","pinyin":"huā duǒ","eng":"flower/blossom"},{"word":"开花","pinyin":"kāi huā","eng":"bloom"}]},{"char":"鱼","pinyin":"yú","meaning":"fish","level":"1A","partners":[{"word":"金鱼","pinyin":"jīn yú","eng":"goldfish"},{"word":"鱼儿","pinyin":"yú ér","eng":"little fish"},{"word":"鱼肉","pinyin":"yú ròu","eng":"fish meat"}]},{"char":"鸟","pinyin":"niǎo","meaning":"bird","level":"1A","partners":[{"word":"小鸟","pinyin":"xiǎo niǎo","eng":"little bird"},{"word":"鸟儿","pinyin":"niǎo ér","eng":"birdie"},{"word":"鸟巢","pinyin":"niǎo cháo","eng":"bird's nest"}]},{"char":"天","pinyin":"tiān","meaning":"sky/day","level":"1A","partners":[{"word":"天气","pinyin":"tiān qì","eng":"weather"},{"word":"天空","pinyin":"tiān kōng","eng":"sky"},{"word":"今天","pinyin":"jīn tiān","eng":"today"},{"word":"天天","pinyin":"tiān tiān","eng":"every day"}]},{"char":"大","pinyin":"dà","meaning":"big/large","level":"1A","partners":[{"word":"大家","pinyin":"dà jiā","eng":"everyone"},{"word":"大人","pinyin":"dà rén","eng":"adult"},{"word":"长大","pinyin":"zhǎng dà","eng":"grow up"}]},{"char":"小","pinyin":"xiǎo","meaning":"small/little","level":"1A","partners":[{"word":"小心","pinyin":"xiǎo xīn","eng":"careful"},{"word":"小学","pinyin":"xiǎo xué","eng":"primary school"},{"word":"小朋友","pinyin":"xiǎo péng yǒu","eng":"children"}]},{"char":"多","pinyin":"duō","meaning":"many/much","level":"1A","partners":[{"word":"多少","pinyin":"duō shǎo","eng":"how many"},{"word":"很多","pinyin":"hěn duō","eng":"a lot"},{"word":"多么","pinyin":"duō me","eng":"how"}]},{"char":"好","pinyin":"hǎo","meaning":"good/well","level":"1A","partners":[{"word":"好吃","pinyin":"hǎo chī","eng":"delicious"},{"word":"好看","pinyin":"hǎo kàn","eng":"nice-looking"},{"word":"好朋友","pinyin":"hǎo péng yǒu","eng":"good friend"}]},{"char":"新","pinyin":"xīn","meaning":"new","level":"1A","partners":[{"word":"新年","pinyin":"xīn nián","eng":"new year"},{"word":"新鲜","pinyin":"xīn xiān","eng":"fresh"},{"word":"全新","pinyin":"quán xīn","eng":"brand new"}]},{"char":"快","pinyin":"kuài","meaning":"fast/quick","level":"1A","partners":[{"word":"快乐","pinyin":"kuài lè","eng":"happy/joyful"},{"word":"快点","pinyin":"kuài diǎn","eng":"hurry up"},{"word":"赶快","pinyin":"gǎn kuài","eng":"hurry"}]},{"char":"学","pinyin":"xué","meaning":"study/learn","level":"1A","partners":[{"word":"学校","pinyin":"xué xiào","eng":"school"},{"word":"学生","pinyin":"xué shēng","eng":"student"},{"word":"学习","pinyin":"xué xí","eng":"study/learn"}]},{"char":"老","pinyin":"lǎo","meaning":"old/teacher","level":"1A","partners":[{"word":"老师","pinyin":"lǎo shī","eng":"teacher"},{"word":"老人","pinyin":"lǎo rén","eng":"elderly person"}]},{"char":"同","pinyin":"tóng","meaning":"same/together","level":"1A","partners":[{"word":"同学","pinyin":"tóng xué","eng":"classmate"},{"word":"同时","pinyin":"tóng shí","eng":"at the same time"},{"word":"一同","pinyin":"yī tóng","eng":"together"}]},{"char":"朋","pinyin":"péng","meaning":"friend","level":"1A","partners":[{"word":"朋友","pinyin":"péng yǒu","eng":"friend"},{"word":"好朋友","pinyin":"hǎo péng yǒu","eng":"good friend"}]},{"char":"友","pinyin":"yǒu","meaning":"friend/friendly","level":"1A","partners":[{"word":"朋友","pinyin":"péng yǒu","eng":"friend"},{"word":"友好","pinyin":"yǒu hǎo","eng":"friendly"},{"word":"友情","pinyin":"yǒu qíng","eng":"friendship"}]},{"char":"红","pinyin":"hóng","meaning":"red","level":"1B","partners":[{"word":"红色","pinyin":"hóng sè","eng":"red colour"},{"word":"红包","pinyin":"hóng bāo","eng":"red packet"}]},{"char":"黄","pinyin":"huáng","meaning":"yellow","level":"1B","partners":[{"word":"黄色","pinyin":"huáng sè","eng":"yellow colour"},{"word":"黄金","pinyin":"huáng jīn","eng":"gold"},{"word":"蛋黄","pinyin":"dàn huáng","eng":"egg yolk"}]},{"char":"蓝","pinyin":"lán","meaning":"blue","level":"1B","partners":[{"word":"蓝色","pinyin":"lán sè","eng":"blue colour"},{"word":"蓝天","pinyin":"lán tiān","eng":"blue sky"}]},{"char":"绿","pinyin":"lǜ","meaning":"green","level":"1B","partners":[{"word":"绿色","pinyin":"lǜ sè","eng":"green colour"},{"word":"绿地","pinyin":"lǜ dì","eng":"green land"},{"word":"绿树","pinyin":"lǜ shù","eng":"green trees"}]},{"char":"白","pinyin":"bái","meaning":"white","level":"1B","partners":[{"word":"白色","pinyin":"bái sè","eng":"white colour"},{"word":"白天","pinyin":"bái tiān","eng":"daytime"},{"word":"雪白","pinyin":"xuě bái","eng":"snow white"}]},{"char":"黑","pinyin":"hēi","meaning":"black","level":"1B","partners":[{"word":"黑色","pinyin":"hēi sè","eng":"black colour"},{"word":"黑暗","pinyin":"hēi àn","eng":"darkness"},{"word":"天黑","pinyin":"tiān hēi","eng":"it's dark/night"}]},{"char":"手","pinyin":"shǒu","meaning":"hand","level":"1B","partners":[{"word":"手机","pinyin":"shǒu jī","eng":"mobile phone"},{"word":"握手","pinyin":"wò shǒu","eng":"shake hands"},{"word":"手心","pinyin":"shǒu xīn","eng":"palm of hand"}]},{"char":"眼","pinyin":"yǎn","meaning":"eye","level":"1B","partners":[{"word":"眼睛","pinyin":"yǎn jīng","eng":"eye"},{"word":"眼泪","pinyin":"yǎn lèi","eng":"tears"},{"word":"眼镜","pinyin":"yǎn jìng","eng":"glasses"}]},{"char":"头","pinyin":"tóu","meaning":"head","level":"1B","partners":[{"word":"头发","pinyin":"tóu fā","eng":"hair"},{"word":"头痛","pinyin":"tóu tòng","eng":"headache"},{"word":"点头","pinyin":"diǎn tóu","eng":"nod head"}]},{"char":"心","pinyin":"xīn","meaning":"heart/mind","level":"1B","partners":[{"word":"心里","pinyin":"xīn lǐ","eng":"in one's heart"},{"word":"开心","pinyin":"kāi xīn","eng":"happy"},{"word":"小心","pinyin":"xiǎo xīn","eng":"careful"}]},{"char":"年","pinyin":"nián","meaning":"year","level":"1B","partners":[{"word":"新年","pinyin":"xīn nián","eng":"new year"},{"word":"今年","pinyin":"jīn nián","eng":"this year"},{"word":"年级","pinyin":"nián jí","eng":"grade/year level"}]},{"char":"早","pinyin":"zǎo","meaning":"early/morning","level":"1B","partners":[{"word":"早上","pinyin":"zǎo shàng","eng":"morning"},{"word":"早安","pinyin":"zǎo ān","eng":"good morning"},{"word":"早饭","pinyin":"zǎo fàn","eng":"breakfast"}]},{"char":"晚","pinyin":"wǎn","meaning":"evening/late","level":"1B","partners":[{"word":"晚上","pinyin":"wǎn shàng","eng":"evening/night"},{"word":"晚安","pinyin":"wǎn ān","eng":"good night"},{"word":"晚饭","pinyin":"wǎn fàn","eng":"dinner"}]},{"char":"上","pinyin":"shàng","meaning":"up/above","level":"1B","partners":[{"word":"上学","pinyin":"shàng xué","eng":"go to school"},{"word":"上面","pinyin":"shàng miàn","eng":"above/on top"}]},{"char":"下","pinyin":"xià","meaning":"down/below","level":"1B","partners":[{"word":"下课","pinyin":"xià kè","eng":"end of class"},{"word":"下面","pinyin":"xià miàn","eng":"below/under"},{"word":"下雨","pinyin":"xià yǔ","eng":"rain"}]},{"char":"雨","pinyin":"yǔ","meaning":"rain","level":"1B","partners":[{"word":"下雨","pinyin":"xià yǔ","eng":"to rain"},{"word":"雨天","pinyin":"yǔ tiān","eng":"rainy day"},{"word":"雨水","pinyin":"yǔ shuǐ","eng":"rainwater"}]},{"char":"风","pinyin":"fēng","meaning":"wind","level":"1B","partners":[{"word":"风雨","pinyin":"fēng yǔ","eng":"wind and rain"},{"word":"风景","pinyin":"fēng jǐng","eng":"scenery"},{"word":"大风","pinyin":"dà fēng","eng":"strong wind"}]},{"char":"太","pinyin":"tài","meaning":"too/very","level":"1B","partners":[{"word":"太阳","pinyin":"tài yáng","eng":"sun"},{"word":"太好了","pinyin":"tài hǎo le","eng":"great"},{"word":"太多","pinyin":"tài duō","eng":"too many"}]},{"char":"阳","pinyin":"yáng","meaning":"sun/yang","level":"1B","partners":[{"word":"太阳","pinyin":"tài yáng","eng":"sun"},{"word":"阳光","pinyin":"yáng guāng","eng":"sunlight"},{"word":"阳台","pinyin":"yáng tái","eng":"balcony"}]},{"char":"高","pinyin":"gāo","meaning":"tall/high","level":"2A","partners":[{"word":"高兴","pinyin":"gāo xīng","eng":"happy/glad"},{"word":"高大","pinyin":"gāo dà","eng":"tall and big"},{"word":"身高","pinyin":"shēn gāo","eng":"height"}]},{"char":"乐","pinyin":"lè","meaning":"happy/music","level":"2A","partners":[{"word":"快乐","pinyin":"kuài lè","eng":"happy"},{"word":"音乐","pinyin":"yīn lè","eng":"music"},{"word":"乐器","pinyin":"lè qì","eng":"musical instrument"}]},{"char":"笑","pinyin":"xiào","meaning":"laugh/smile","level":"2A","partners":[{"word":"笑脸","pinyin":"xiào liǎn","eng":"smiling face"},{"word":"微笑","pinyin":"wēi xiào","eng":"smile"},{"word":"大笑","pinyin":"dà xiào","eng":"laugh loudly"}]},{"char":"跑","pinyin":"pǎo","meaning":"run","level":"2A","partners":[{"word":"跑步","pinyin":"pǎo bù","eng":"run/jog"},{"word":"赛跑","pinyin":"sài pǎo","eng":"race"},{"word":"逃跑","pinyin":"táo pǎo","eng":"run away"}]},{"char":"跳","pinyin":"tiào","meaning":"jump","level":"2A","partners":[{"word":"跳绳","pinyin":"tiào shéng","eng":"jump rope"},{"word":"跳舞","pinyin":"tiào wǔ","eng":"dance"},{"word":"跳高","pinyin":"tiào gāo","eng":"high jump"}]},{"char":"唱","pinyin":"chàng","meaning":"sing","level":"2A","partners":[{"word":"唱歌","pinyin":"chàng gē","eng":"sing a song"},{"word":"合唱","pinyin":"hé chàng","eng":"chorus/choir"}]},{"char":"画","pinyin":"huà","meaning":"draw/paint","level":"2A","partners":[{"word":"画画","pinyin":"huà huà","eng":"draw/paint"},{"word":"画面","pinyin":"huà miàn","eng":"picture/image"},{"word":"图画","pinyin":"tú huà","eng":"picture/drawing"}]},{"char":"写","pinyin":"xiě","meaning":"write","level":"2A","partners":[{"word":"写字","pinyin":"xiě zì","eng":"write characters"},{"word":"写作","pinyin":"xiě zuò","eng":"writing"},{"word":"书写","pinyin":"shū xiě","eng":"handwriting"}]},{"char":"读","pinyin":"dú","meaning":"read","level":"2A","partners":[{"word":"读书","pinyin":"dú shū","eng":"study/read"},{"word":"朗读","pinyin":"lǎng dú","eng":"read aloud"},{"word":"阅读","pinyin":"yuè dú","eng":"reading"}]},{"char":"问","pinyin":"wèn","meaning":"ask","level":"2A","partners":[{"word":"问题","pinyin":"wèn tí","eng":"question/problem"},{"word":"请问","pinyin":"qǐng wèn","eng":"excuse me/may I ask"},{"word":"提问","pinyin":"tí wèn","eng":"ask a question"}]},{"char":"开","pinyin":"kāi","meaning":"open/start","level":"2A","partners":[{"word":"开心","pinyin":"kāi xīn","eng":"happy"},{"word":"开始","pinyin":"kāi shǐ","eng":"begin/start"},{"word":"打开","pinyin":"dǎ kāi","eng":"open up"}]},{"char":"爱","pinyin":"ài","meaning":"love","level":"2A","partners":[{"word":"爱好","pinyin":"ài hǎo","eng":"hobby"},{"word":"可爱","pinyin":"kě ài","eng":"cute/adorable"},{"word":"爱护","pinyin":"ài hù","eng":"cherish"}]},{"char":"帮","pinyin":"bāng","meaning":"help","level":"2A","partners":[{"word":"帮助","pinyin":"bāng zhù","eng":"help/assist"},{"word":"帮忙","pinyin":"bāng máng","eng":"help out"},{"word":"帮手","pinyin":"bāng shǒu","eng":"helper"}]},{"char":"知","pinyin":"zhī","meaning":"know","level":"2A","partners":[{"word":"知道","pinyin":"zhī dào","eng":"know"},{"word":"知识","pinyin":"zhī shí","eng":"knowledge"},{"word":"通知","pinyin":"tōng zhī","eng":"notify"}]},{"char":"用","pinyin":"yòng","meaning":"use","level":"2A","partners":[{"word":"用心","pinyin":"yòng xīn","eng":"attentively"},{"word":"有用","pinyin":"yǒu yòng","eng":"useful"},{"word":"使用","pinyin":"shǐ yòng","eng":"use/utilize"}]},{"char":"睡","pinyin":"shuì","meaning":"sleep","level":"2A","partners":[{"word":"睡觉","pinyin":"shuì jué","eng":"sleep"},{"word":"睡眠","pinyin":"shuì mián","eng":"slumber"},{"word":"睡着","pinyin":"shuì zhe","eng":"fall asleep"}]},{"char":"热","pinyin":"rè","meaning":"hot","level":"2A","partners":[{"word":"热情","pinyin":"rè qíng","eng":"enthusiasm"},{"word":"热心","pinyin":"rè xīn","eng":"warm-hearted"}]},{"char":"冷","pinyin":"lěng","meaning":"cold","level":"2A","partners":[{"word":"冷静","pinyin":"lěng jìng","eng":"calm/cool-headed"},{"word":"冰冷","pinyin":"bīng lěng","eng":"ice cold"}]},{"char":"饭","pinyin":"fàn","meaning":"rice/meal","level":"2A","partners":[{"word":"吃饭","pinyin":"chī fàn","eng":"eat a meal"},{"word":"午饭","pinyin":"wǔ fàn","eng":"lunch"},{"word":"晚饭","pinyin":"wǎn fàn","eng":"dinner"}]},{"char":"菜","pinyin":"cài","meaning":"vegetable/dish","level":"2A","partners":[{"word":"蔬菜","pinyin":"shū cài","eng":"vegetables"},{"word":"菜单","pinyin":"cài dān","eng":"menu"},{"word":"炒菜","pinyin":"chǎo cài","eng":"stir-fry"}]},{"char":"果","pinyin":"guǒ","meaning":"fruit/result","level":"2A","partners":[{"word":"水果","pinyin":"shuǐ guǒ","eng":"fruit"},{"word":"苹果","pinyin":"píng guǒ","eng":"apple"},{"word":"结果","pinyin":"jié guǒ","eng":"result"}]},{"char":"树","pinyin":"shù","meaning":"tree","level":"2B","partners":[{"word":"大树","pinyin":"dà shù","eng":"big tree"},{"word":"树木","pinyin":"shù mù","eng":"trees"},{"word":"树叶","pinyin":"shù yè","eng":"leaves"}]},{"char":"山","pinyin":"shān","meaning":"mountain","level":"2B","partners":[{"word":"山上","pinyin":"shān shàng","eng":"on the mountain"},{"word":"爬山","pinyin":"pá shān","eng":"climb a mountain"},{"word":"山水","pinyin":"shān shuǐ","eng":"mountains and rivers"}]},{"char":"海","pinyin":"hǎi","meaning":"sea/ocean","level":"2B","partners":[{"word":"大海","pinyin":"dà hǎi","eng":"sea/ocean"},{"word":"海边","pinyin":"hǎi biān","eng":"seaside"},{"word":"海洋","pinyin":"hǎi yáng","eng":"ocean"}]},{"char":"路","pinyin":"lù","meaning":"road/path","level":"2B","partners":[{"word":"路上","pinyin":"lù shàng","eng":"on the road"},{"word":"道路","pinyin":"dào lù","eng":"road/path"},{"word":"出路","pinyin":"chū lù","eng":"way out"}]},{"char":"车","pinyin":"chē","meaning":"vehicle/car","level":"2B","partners":[{"word":"汽车","pinyin":"qì chē","eng":"car"},{"word":"公车","pinyin":"gōng chē","eng":"public bus"},{"word":"火车","pinyin":"huǒ chē","eng":"train"}]},{"char":"飞","pinyin":"fēi","meaning":"fly","level":"2B","partners":[{"word":"飞机","pinyin":"fēi jī","eng":"airplane"},{"word":"飞行","pinyin":"fēi xíng","eng":"flight"},{"word":"飞快","pinyin":"fēi kuài","eng":"very fast"}]},{"char":"狗","pinyin":"gǒu","meaning":"dog","level":"2B","partners":[{"word":"小狗","pinyin":"xiǎo gǒu","eng":"puppy"},{"word":"看门狗","pinyin":"kàn mén gǒu","eng":"guard dog"}]},{"char":"猫","pinyin":"māo","meaning":"cat","level":"2B","partners":[{"word":"小猫","pinyin":"xiǎo māo","eng":"kitten"},{"word":"猫咪","pinyin":"māo mī","eng":"kitty"}]},{"char":"牛","pinyin":"niú","meaning":"cow/ox","level":"2B","partners":[{"word":"牛奶","pinyin":"niú nǎi","eng":"milk"},{"word":"牛肉","pinyin":"niú ròu","eng":"beef"},{"word":"水牛","pinyin":"shuǐ niú","eng":"water buffalo"}]},{"char":"空","pinyin":"kōng","meaning":"sky/empty","level":"2B","partners":[{"word":"天空","pinyin":"tiān kōng","eng":"sky"},{"word":"空气","pinyin":"kōng qì","eng":"air"},{"word":"空白","pinyin":"kōng bái","eng":"blank/empty"}]},{"char":"云","pinyin":"yún","meaning":"cloud","level":"2B","partners":[{"word":"白云","pinyin":"bái yún","eng":"white cloud"},{"word":"云朵","pinyin":"yún duǒ","eng":"cloud"},{"word":"乌云","pinyin":"wū yún","eng":"dark cloud"}]},{"char":"星","pinyin":"xīng","meaning":"star","level":"2B","partners":[{"word":"星星","pinyin":"xīng xīng","eng":"star"},{"word":"明星","pinyin":"míng xīng","eng":"celebrity/star"},{"word":"星期","pinyin":"xīng qī","eng":"week"}]},{"char":"光","pinyin":"guāng","meaning":"light","level":"2B","partners":[{"word":"阳光","pinyin":"yáng guāng","eng":"sunlight"},{"word":"月光","pinyin":"yuè guāng","eng":"moonlight"},{"word":"灯光","pinyin":"dēng guāng","eng":"lamplight"}]},{"char":"亮","pinyin":"liàng","meaning":"bright/shiny","level":"2B","partners":[{"word":"明亮","pinyin":"míng liàng","eng":"bright/well-lit"},{"word":"月亮","pinyin":"yuè liàng","eng":"moon"},{"word":"发亮","pinyin":"fā liàng","eng":"shine/gleam"}]},{"char":"认","pinyin":"rèn","meaning":"recognise/know","level":"3A","partners":[{"word":"认识","pinyin":"rèn shí","eng":"know/recognise"},{"word":"认真","pinyin":"rèn zhēn","eng":"serious/careful"},{"word":"承认","pinyin":"chéng rèn","eng":"admit"}]},{"char":"真","pinyin":"zhēn","meaning":"real/true","level":"3A","partners":[{"word":"认真","pinyin":"rèn zhēn","eng":"serious/careful"},{"word":"真正","pinyin":"zhēn zhèng","eng":"real/genuine"},{"word":"真的","pinyin":"zhēn de","eng":"really"}]},{"char":"努","pinyin":"nǔ","meaning":"strive/effort","level":"3A","partners":[{"word":"努力","pinyin":"nǔ lì","eng":"work hard"}]},{"char":"力","pinyin":"lì","meaning":"strength/power","level":"3A","partners":[{"word":"努力","pinyin":"nǔ lì","eng":"work hard"},{"word":"力气","pinyin":"lì qì","eng":"strength"},{"word":"全力","pinyin":"quán lì","eng":"full strength"}]},{"char":"勤","pinyin":"qín","meaning":"diligent","level":"3A","partners":[{"word":"勤劳","pinyin":"qín láo","eng":"hardworking"},{"word":"勤奋","pinyin":"qín fèn","eng":"industrious"},{"word":"勤快","pinyin":"qín kuài","eng":"hardworking"}]},{"char":"勇","pinyin":"yǒng","meaning":"brave/courageous","level":"3A","partners":[{"word":"勇敢","pinyin":"yǒng gǎn","eng":"brave/courageous"},{"word":"勇气","pinyin":"yǒng qì","eng":"courage"},{"word":"英勇","pinyin":"yīng yǒng","eng":"heroic/brave"}]},{"char":"诚","pinyin":"chéng","meaning":"sincere/honest","level":"3A","partners":[{"word":"诚实","pinyin":"chéng shí","eng":"honest"},{"word":"诚信","pinyin":"chéng xìn","eng":"integrity"},{"word":"真诚","pinyin":"zhēn chéng","eng":"sincere"}]},{"char":"礼","pinyin":"lǐ","meaning":"courtesy/gift","level":"3A","partners":[{"word":"礼貌","pinyin":"lǐ mào","eng":"polite/courteous"},{"word":"礼物","pinyin":"lǐ wù","eng":"gift/present"},{"word":"有礼","pinyin":"yǒu lǐ","eng":"polite"}]},{"char":"互","pinyin":"hù","meaning":"mutual","level":"3A","partners":[{"word":"互相","pinyin":"hù xiāng","eng":"mutually"},{"word":"互助","pinyin":"hù zhù","eng":"help each other"},{"word":"互动","pinyin":"hù dòng","eng":"interact"}]},{"char":"分","pinyin":"fēn","meaning":"divide/part","level":"3A","partners":[{"word":"部分","pinyin":"bù fēn","eng":"part/portion"},{"word":"分开","pinyin":"fēn kāi","eng":"separate"},{"word":"十分","pinyin":"shí fēn","eng":"very"}]},{"char":"部","pinyin":"bù","meaning":"part/section","level":"3A","partners":[{"word":"部分","pinyin":"bù fēn","eng":"part/portion"},{"word":"全部","pinyin":"quán bù","eng":"all/entire"},{"word":"内部","pinyin":"nèi bù","eng":"inside"}]},{"char":"比","pinyin":"bǐ","meaning":"compare","level":"3A","partners":[{"word":"比较","pinyin":"bǐ jiào","eng":"compare"},{"word":"比赛","pinyin":"bǐ sài","eng":"competition/match"},{"word":"对比","pinyin":"duì bǐ","eng":"contrast"}]},{"char":"赛","pinyin":"sài","meaning":"compete/race","level":"3A","partners":[{"word":"比赛","pinyin":"bǐ sài","eng":"competition/match"},{"word":"赛跑","pinyin":"sài pǎo","eng":"race"},{"word":"参赛","pinyin":"cān sài","eng":"compete"}]},{"char":"参","pinyin":"cān","meaning":"participate","level":"3A","partners":[{"word":"参加","pinyin":"cān jiā","eng":"join/participate"},{"word":"参观","pinyin":"cān guān","eng":"visit/tour"},{"word":"参与","pinyin":"cān yǔ","eng":"take part"}]},{"char":"全","pinyin":"quán","meaning":"complete/all","level":"3A","partners":[{"word":"全部","pinyin":"quán bù","eng":"all/entire"},{"word":"全力","pinyin":"quán lì","eng":"full strength"},{"word":"安全","pinyin":"ān quán","eng":"safe"}]},{"char":"安","pinyin":"ān","meaning":"safe/peaceful","level":"3A","partners":[{"word":"安全","pinyin":"ān quán","eng":"safe/safety"},{"word":"安心","pinyin":"ān xīn","eng":"at ease"},{"word":"平安","pinyin":"píng ān","eng":"safe and sound"}]},{"char":"生","pinyin":"shēng","meaning":"life/born","level":"3A","partners":[{"word":"生活","pinyin":"shēng huó","eng":"life/living"},{"word":"学生","pinyin":"xué shēng","eng":"student"},{"word":"生命","pinyin":"shēng mìng","eng":"life"}]},{"char":"活","pinyin":"huó","meaning":"live/lively","level":"3A","partners":[{"word":"生活","pinyin":"shēng huó","eng":"life/living"},{"word":"活动","pinyin":"huó dòng","eng":"activity"},{"word":"活泼","pinyin":"huó pō","eng":"lively"}]},{"char":"动","pinyin":"dòng","meaning":"move/activity","level":"3A","partners":[{"word":"活动","pinyin":"huó dòng","eng":"activity"},{"word":"运动","pinyin":"yùn dòng","eng":"exercise/sport"},{"word":"行动","pinyin":"xíng dòng","eng":"action"}]},{"char":"健","pinyin":"jiàn","meaning":"healthy","level":"3A","partners":[{"word":"健康","pinyin":"jiàn kāng","eng":"healthy"},{"word":"健身","pinyin":"jiàn shēn","eng":"fitness"},{"word":"强健","pinyin":"qiáng jiàn","eng":"strong and healthy"}]},{"char":"保","pinyin":"bǎo","meaning":"protect","level":"3A","partners":[{"word":"保护","pinyin":"bǎo hù","eng":"protect"},{"word":"保证","pinyin":"bǎo zhèng","eng":"guarantee"},{"word":"保持","pinyin":"bǎo chí","eng":"maintain"}]},{"char":"清","pinyin":"qīng","meaning":"clear/clean","level":"3A","partners":[{"word":"清楚","pinyin":"qīng chǔ","eng":"clear/clearly"},{"word":"清洁","pinyin":"qīng jié","eng":"clean"},{"word":"清晨","pinyin":"qīng chén","eng":"early morning"}]},{"char":"美","pinyin":"měi","meaning":"beautiful","level":"3A","partners":[{"word":"美丽","pinyin":"měi lì","eng":"beautiful"},{"word":"美好","pinyin":"měi hǎo","eng":"wonderful"},{"word":"美术","pinyin":"měi shù","eng":"art"}]},{"char":"特","pinyin":"tè","meaning":"special","level":"3A","partners":[{"word":"特别","pinyin":"tè bié","eng":"special/especially"},{"word":"特点","pinyin":"tè diǎn","eng":"feature"},{"word":"独特","pinyin":"dú tè","eng":"unique"}]},{"char":"然","pinyin":"rán","meaning":"so/like that","level":"3A","partners":[{"word":"自然","pinyin":"zì rán","eng":"nature/natural"},{"word":"当然","pinyin":"dāng rán","eng":"of course"},{"word":"突然","pinyin":"tū rán","eng":"suddenly"}]},{"char":"自","pinyin":"zì","meaning":"self/oneself","level":"3A","partners":[{"word":"自然","pinyin":"zì rán","eng":"nature/natural"},{"word":"自己","pinyin":"zì jǐ","eng":"oneself"},{"word":"自信","pinyin":"zì xìn","eng":"self-confident"}]},{"char":"感","pinyin":"gǎn","meaning":"feel/sense","level":"3B","partners":[{"word":"感谢","pinyin":"gǎn xiè","eng":"thank/grateful"},{"word":"感觉","pinyin":"gǎn jué","eng":"feeling/sense"},{"word":"感动","pinyin":"gǎn dòng","eng":"be moved"}]},{"char":"谢","pinyin":"xiè","meaning":"thank","level":"3B","partners":[{"word":"感谢","pinyin":"gǎn xiè","eng":"thank/grateful"},{"word":"谢谢","pinyin":"xiè xiè","eng":"thank you"},{"word":"道谢","pinyin":"dào xiè","eng":"express thanks"}]},{"char":"思","pinyin":"sī","meaning":"think/thought","level":"3B","partners":[{"word":"思考","pinyin":"sī kǎo","eng":"think/ponder"},{"word":"思念","pinyin":"sī niàn","eng":"miss/long for"},{"word":"意思","pinyin":"yì sī","eng":"meaning"}]},{"char":"考","pinyin":"kǎo","meaning":"examine/test","level":"3B","partners":[{"word":"思考","pinyin":"sī kǎo","eng":"think/ponder"},{"word":"考试","pinyin":"kǎo shì","eng":"exam/test"},{"word":"考虑","pinyin":"kǎo lǜ","eng":"consider"}]},{"char":"意","pinyin":"yì","meaning":"meaning/intention","level":"3B","partners":[{"word":"意思","pinyin":"yì sī","eng":"meaning/idea"},{"word":"注意","pinyin":"zhù yì","eng":"pay attention"},{"word":"同意","pinyin":"tóng yì","eng":"agree"}]},{"char":"决","pinyin":"jué","meaning":"decide","level":"3B","partners":[{"word":"决定","pinyin":"jué dìng","eng":"decide/decision"},{"word":"解决","pinyin":"jiě jué","eng":"solve/resolve"},{"word":"坚决","pinyin":"jiān jué","eng":"resolute"}]},{"char":"解","pinyin":"jiě","meaning":"understand/solve","level":"3B","partners":[{"word":"解决","pinyin":"jiě jué","eng":"solve/resolve"},{"word":"了解","pinyin":"le jiě","eng":"understand"},{"word":"解释","pinyin":"jiě shì","eng":"explain"}]},{"char":"难","pinyin":"nán","meaning":"difficult","level":"3B","partners":[{"word":"困难","pinyin":"kùn nán","eng":"difficulty"},{"word":"难过","pinyin":"nán guò","eng":"sad/feel bad"},{"word":"难以","pinyin":"nán yǐ","eng":"difficult to"}]},{"char":"容","pinyin":"róng","meaning":"easy/contain","level":"3B","partners":[{"word":"容易","pinyin":"róng yì","eng":"easy"},{"word":"内容","pinyin":"nèi róng","eng":"content"}]},{"char":"变","pinyin":"biàn","meaning":"change","level":"3B","partners":[{"word":"变化","pinyin":"biàn huà","eng":"change"},{"word":"变成","pinyin":"biàn chéng","eng":"become"},{"word":"改变","pinyin":"gǎi biàn","eng":"change/alter"}]},{"char":"长","pinyin":"zhǎng","meaning":"grow/long","level":"3B","partners":[{"word":"成长","pinyin":"chéng zhǎng","eng":"grow up"},{"word":"长大","pinyin":"zhǎng dà","eng":"grow up"},{"word":"生长","pinyin":"shēng zhǎng","eng":"grow"}]},{"char":"成","pinyin":"chéng","meaning":"become/accomplish","level":"3B","partners":[{"word":"成长","pinyin":"chéng zhǎng","eng":"grow up"},{"word":"成功","pinyin":"chéng gōng","eng":"succeed"},{"word":"完成","pinyin":"wán chéng","eng":"complete"}]},{"char":"功","pinyin":"gōng","meaning":"merit/achievement","level":"3B","partners":[{"word":"成功","pinyin":"chéng gōng","eng":"succeed"},{"word":"功课","pinyin":"gōng kè","eng":"schoolwork"},{"word":"用功","pinyin":"yòng gōng","eng":"study hard"}]},{"char":"作","pinyin":"zuò","meaning":"do/work","level":"3B","partners":[{"word":"工作","pinyin":"gōng zuò","eng":"work/job"},{"word":"作业","pinyin":"zuò yè","eng":"homework"},{"word":"合作","pinyin":"hé zuò","eng":"cooperate"}]},{"char":"合","pinyin":"hé","meaning":"combine/suit","level":"3B","partners":[{"word":"合作","pinyin":"hé zuò","eng":"cooperate"},{"word":"合适","pinyin":"hé shì","eng":"suitable"},{"word":"配合","pinyin":"pèi hé","eng":"cooperate"}]},{"char":"体","pinyin":"tǐ","meaning":"body","level":"3B","partners":[{"word":"身体","pinyin":"shēn tǐ","eng":"body/health"},{"word":"体育","pinyin":"tǐ yù","eng":"physical education"},{"word":"体力","pinyin":"tǐ lì","eng":"physical strength"}]},{"char":"教","pinyin":"jiào","meaning":"teach","level":"3B","partners":[{"word":"教育","pinyin":"jiào yù","eng":"education"},{"word":"教室","pinyin":"jiào shì","eng":"classroom"},{"word":"教导","pinyin":"jiào dǎo","eng":"teach"}]},{"char":"世","pinyin":"shì","meaning":"world/generation","level":"3B","partners":[{"word":"世界","pinyin":"shì jiè","eng":"world"},{"word":"世纪","pinyin":"shì jì","eng":"century"}]},{"char":"国","pinyin":"guó","meaning":"country/nation","level":"3B","partners":[{"word":"国家","pinyin":"guó jiā","eng":"country/nation"},{"word":"中国","pinyin":"zhōng guó","eng":"China"},{"word":"外国","pinyin":"wài guó","eng":"foreign country"}]},{"char":"环","pinyin":"huán","meaning":"environment/ring","level":"3B","partners":[{"word":"环境","pinyin":"huán jìng","eng":"environment"},{"word":"环保","pinyin":"huán bǎo","eng":"environmental protection"}]},{"char":"节","pinyin":"jié","meaning":"festival/section","level":"3B","partners":[{"word":"节日","pinyin":"jié rì","eng":"festival/holiday"},{"word":"节约","pinyin":"jié yuē","eng":"save/economise"},{"word":"季节","pinyin":"jì jié","eng":"season"}]},{"char":"季","pinyin":"jì","meaning":"season","level":"3B","partners":[{"word":"季节","pinyin":"jì jié","eng":"season"},{"word":"四季","pinyin":"sì jì","eng":"four seasons"},{"word":"冬季","pinyin":"dōng jì","eng":"winter"}]},{"char":"景","pinyin":"jǐng","meaning":"scenery/view","level":"3B","partners":[{"word":"风景","pinyin":"fēng jǐng","eng":"scenery"},{"word":"景色","pinyin":"jǐng sè","eng":"scenery"},{"word":"背景","pinyin":"bèi jǐng","eng":"background"}]},{"char":"彩","pinyin":"cǎi","meaning":"colour/colourful","level":"3B","partners":[{"word":"彩色","pinyin":"cǎi sè","eng":"colourful"},{"word":"精彩","pinyin":"jīng cǎi","eng":"wonderful"},{"word":"彩虹","pinyin":"cǎi hóng","eng":"rainbow"}]},{"char":"精","pinyin":"jīng","meaning":"essence/spirit","level":"3B","partners":[{"word":"精彩","pinyin":"jīng cǎi","eng":"wonderful"},{"word":"精神","pinyin":"jīng shén","eng":"spirit/energy"},{"word":"精心","pinyin":"jīng xīn","eng":"carefully"}]},{"char":"神","pinyin":"shén","meaning":"spirit/god","level":"3B","partners":[{"word":"精神","pinyin":"jīng shén","eng":"spirit/energy"},{"word":"神奇","pinyin":"shén qí","eng":"magical"},{"word":"神话","pinyin":"shén huà","eng":"mythology"}]}];
+
+const LEVELS = [
+  { num:1, name:"P1 Basics",    sources:["1A"],       distractors:2, speed:1.0, wordsNeeded:8,
+    creature:"🐬", bg:["#001a1a","#002a2a","#003a3a"],
+    description:"Start your dolphin journey with P1 basics!" },
+  { num:2, name:"P1 Advanced",  sources:["1A","1B"],  distractors:2, speed:1.3, wordsNeeded:10,
+    creature:"🐬", bg:["#001520","#002030","#002a3a"],
+    description:"Dive deeper into P1 vocabulary!" },
+  { num:3, name:"P2 Basics",    sources:["2A"],       distractors:3, speed:1.6, wordsNeeded:10,
+    creature:"🐬", bg:["#00151a","#001e24","#00272e"],
+    description:"P2 words — Aryan is getting stronger!" },
+  { num:4, name:"P2 Advanced",  sources:["2A","2B"],  distractors:3, speed:1.9, wordsNeeded:12,
+    creature:"🐬", bg:["#001018","#001820","#002028"],
+    description:"Mix of P2 — the ocean gets deeper!" },
+  { num:5, name:"P3 Basics",    sources:["3A"],       distractors:4, speed:2.2, wordsNeeded:12,
+    creature:"🐬", bg:["#000e18","#001422","#001a2a"],
+    description:"P3 challenge begins — you can do it!" },
+  { num:6, name:"P3 Master",    sources:["3A","3B"],  distractors:4, speed:2.6, wordsNeeded:15,
+    creature:"🐬", bg:["#000a14","#00101e","#001528"],
+    description:"Master all P3 words — the ultimate dolphin!" }
+];
+
+// Dolphin reward milestones — different dolphin species!
+const DOLPHINS = [
+  { emoji:"🐬", name:"Bottlenose Dolphin",   fact:"The most well-known dolphin — super smart and playful!" },
+  { emoji:"🐬", name:"Spinner Dolphin",       fact:"Can spin up to 7 times in the air in one leap!" },
+  { emoji:"🐬", name:"Spotted Dolphin",       fact:"Born without spots — they appear as they grow older!" },
+  { emoji:"🐬", name:"Common Dolphin",        fact:"Lives in large pods of up to 1,000 dolphins!" },
+  { emoji:"🐬", name:"Orca (Killer Whale)",   fact:"Actually the largest member of the dolphin family!" },
+  { emoji:"🐬", name:"Pink River Dolphin",    fact:"The rarest dolphin — found only in the Amazon River!" }
+];
+
+const FOOD_EMOJIS = ["🦐","🐟","🦀","🐠","🦞","🦑","🐡","🦪","🐚","🌊","🫧","🪸","🐋","🦭","🐙","🌿"];
+const BUBBLE_FILLS   = ["rgba(0,60,70,0.78)","rgba(0,50,65,0.75)","rgba(0,55,60,0.76)","rgba(0,45,55,0.75)","rgba(0,65,70,0.72)"];
+const BUBBLE_STROKES = ["#009999","#00aaaa","#008888","#00bbbb","#007799"];
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let W = window.innerWidth, H = window.innerHeight;
+canvas.width = W; canvas.height = H;
+window.addEventListener("resize", () => { W=window.innerWidth; H=window.innerHeight; canvas.width=W; canvas.height=H; });
+
+let gameState="menu", selectedLevel=1, score=0, lives=3, streak=0;
+let currentChallenge=null, foodItems=[], bubbles=[], particles=[];
+let player={}, frameCount=0, wordsCorrect=0, levelConfig=null, animFrame=null;
+let feedbackActive=false;
+let highScores=JSON.parse(localStorage.getItem("aryanHS")||"{}");
+
+let mouse={x:0,y:0};
+canvas.addEventListener("mousemove",e=>{mouse.x=e.clientX;mouse.y=e.clientY;});
+canvas.addEventListener("touchmove",e=>{e.preventDefault();mouse.x=e.touches[0].clientX;mouse.y=e.touches[0].clientY;},{passive:false});
+canvas.addEventListener("touchstart",e=>{mouse.x=e.touches[0].clientX;mouse.y=e.touches[0].clientY;});
+
+// Pinyin map
+const PINYIN_MAP = {"回":"huí","环":"huán","生":"shēng","歌":"gē","约":"yuē","里":"lǐ","改":"gǎi","知":"zhī","老":"lǎo","习":"xí","起":"qǐ","门":"mén","部":"bù","耍":"shuǎ","功":"gōng","赶":"gǎn","念":"niàn","树":"shù","定":"dìng","用":"yòng","绿":"lǜ","内":"nèi","外":"wài","车":"chē","虑":"lǜ","学":"xué","神":"shén","包":"bāo","色":"sè","午":"wǔ","脸":"liǎn","人":"rén","冬":"dōng","见":"jiàn","请":"qǐng","海":"hǎi","猫":"māo","清":"qīng","听":"tīng","原":"yuán","诚":"chéng","木":"mù","导":"dǎo","帮":"bāng","机":"jī","提":"tí","来":"lái","少":"shǎo","岁":"suì","爱":"ài","活":"huó","健":"jiàn","解":"jiě","么":"me","对":"duì","身":"shēn","景":"jǐng","注":"zhù","走":"zǒu","合":"hé","看":"kàn","持":"chí","地":"dì","考":"kǎo","命":"mìng","行":"xíng","泼":"pō","着":"zhe","飞":"fēi","苹":"píng","白":"bái","睛":"jīng","决":"jué","易":"yì","太":"tài","术":"shù","作":"zuò","礼":"lǐ","较":"jiào","官":"guān","实":"shí","泪":"lèi","赛":"sài","读":"dú","说":"shuō","写":"xiě","菜":"cài","结":"jié","山":"shān","早":"zǎo","虹":"hóng","年":"nián","真":"zhēn","九":"jiǔ","洋":"yáng","冰":"bīng","证":"zhèng","时":"shí","笑":"xiào","园":"yuán","器":"qì","一":"yī","头":"tóu","热":"rè","牛":"niú","很":"hěn","洁":"jié","精":"jīng","路":"lù","单":"dān","容":"róng","朵":"duǒ","心":"xīn","乌":"wū","新":"xīn","咪":"mī","劳":"láo","阳":"yáng","同":"tóng","运":"yùn","饭":"fàn","级":"jí","蓝":"lán","谢":"xiè","天":"tiān","七":"qī","教":"jiào","校":"xiào","亮":"liàng","然":"rán","灯":"dēng","季":"jì","发":"fā","金":"jīn","公":"gōng","爷":"yé","自":"zì","纪":"jì","口":"kǒu","可":"kě","六":"liù","释":"shì","分":"fēn","眠":"mián","题":"tí","困":"kùn","正":"zhèng","以":"yǐ","独":"dú","弟":"dì","肉":"ròu","手":"shǒu","爸":"bà","吃":"chī","炒":"chǎo","奋":"fèn","特":"tè","们":"men","水":"shuǐ","明":"míng","相":"xiāng","十":"shí","冷":"lěng","承":"chéng","今":"jīn","到":"dào","鱼":"yú","边":"biān","话":"huà","快":"kuài","暗":"àn","静":"jìng","花":"huā","蔬":"shū","微":"wēi","美":"měi","兴":"xīng","唱":"chàng","意":"yì","爬":"pá","五":"wǔ","加":"jiā","工":"gōng","出":"chū","黄":"huáng","茶":"chá","去":"qù","试":"shì","二":"èr","力":"lì","了":"le","下":"xià","期":"qī","高":"gāo","样":"yàng","妈":"mā","思":"sī","握":"wò","我":"wǒ","当":"dāng","安":"ān","第":"dì","动":"dòng","室":"shì","书":"shū","开":"kāi","家":"jiā","病":"bìng","舞":"wǔ","中":"zhōng","忙":"máng","妹":"mèi","鲜":"xiān","师":"shī","敢":"gǎn","多":"duō","勇":"yǒng","勤":"qín","觉":"jué","奶":"nǎi","点":"diǎn","步":"bù","乐":"lè","痛":"tòng","光":"guāng","汽":"qì","节":"jié","业":"yè","国":"guó","东":"dōng","馆":"guǎn","背":"bèi","图":"tú","叶":"yè","育":"yù","睡":"shuì","使":"shǐ","貌":"mào","晨":"chén","道":"dào","面":"miàn","星":"xīng","感":"gǎn","情":"qíng","儿":"ér","己":"jǐ","玩":"wán","变":"biàn","云":"yún","果":"guǒ","阅":"yuè","火":"huǒ","康":"kāng","具":"jù","丽":"lì","好":"hǎo","西":"xī","上":"shàng","空":"kōng","跳":"tiào","识":"shí","三":"sān","鸟":"niǎo","体":"tǐ","问":"wèn","世":"shì","努":"nǔ","镜":"jìng","小":"xiǎo","做":"zuò","红":"hóng","朋":"péng","适":"shì","音":"yīn","喝":"hē","姐":"jiě","雨":"yǔ","大":"dà","巢":"cháo","互":"hù","课":"kè","过":"guò","逃":"táo","楚":"chǔ","日":"rì","蛋":"dàn","晚":"wǎn","英":"yīng","字":"zì","朗":"lǎng","八":"bā","风":"fēng","界":"jiè","气":"qì","哥":"gē","狗":"gǒu","奇":"qí","黑":"hēi","保":"bǎo","长":"zhǎng","信":"xìn","打":"dǎ","他":"tā","别":"bié","画":"huà","参":"cān","坚":"jiān","化":"huà","彩":"cǎi","强":"qiáng","四":"sì","配":"pèi","绳":"shéng","她":"tā","与":"yǔ","全":"quán","护":"hù","物":"wù","月":"yuè","兄":"xiōng","有":"yǒu","眼":"yǎn","难":"nán","的":"de","比":"bǐ","你":"nǐ","跑":"pǎo","突":"tū","雪":"xuě","观":"guān","台":"tái","始":"shǐ","通":"tōng","平":"píng","友":"yǒu","境":"jìng","完":"wán","成":"chéng","认":"rèn","助":"zhù"};
+WORD_DATA.forEach(w => { PINYIN_MAP[w.char] = w.pinyin.split('/')[0].trim(); });
+const COMPOUND_PINYIN_MAP = {};
+WORD_DATA.forEach(w => {
+  w.partners.forEach(p => {
+    if(!COMPOUND_PINYIN_MAP[p.word]) COMPOUND_PINYIN_MAP[p.word] = buildPinyin(p.word);
+  });
+});
+function buildPinyin(word) {
+  let parts = [];
+  for(const ch of word) parts.push(PINYIN_MAP[ch] || ch);
+  return parts.join(" ");
+}
+function lookupPinyin(word) {
+  if(COMPOUND_PINYIN_MAP[word]) return COMPOUND_PINYIN_MAP[word];
+  return buildPinyin(word);
+}
+
+function getWordsForLevel(lvl){ return WORD_DATA.filter(w=>lvl.sources.includes(w.level)&&w.partners.length>0); }
+
+function buildChallenge(lvlWords, allWords){
+  const w = lvlWords[Math.floor(Math.random()*lvlWords.length)];
+  const correctPartner = w.partners[Math.floor(Math.random()*w.partners.length)];
+  let distractors=[], seen=new Set([correctPartner.word]);
+  let attempts=0;
+  while(distractors.length < levelConfig.distractors && attempts<300){
+    attempts++;
+    const rw=allWords[Math.floor(Math.random()*allWords.length)];
+    if(rw.char===w.char) continue;
+    const rp=rw.partners[Math.floor(Math.random()*rw.partners.length)];
+    if(!seen.has(rp.word)){
+      seen.add(rp.word);
+      distractors.push({ word:rp.word, eng:rp.eng, pinyin:rp.pinyin||buildPinyin(rp.word), parentChar:rw.char, parentPinyin:rw.pinyin, parentMeaning:rw.meaning });
+    }
+  }
+  return { char:w.char, pinyin:w.pinyin, meaning:w.meaning, correctPartner:{ word:correctPartner.word, eng:correctPartner.eng, pinyin:correctPartner.pinyin||buildPinyin(correctPartner.word)}, distractors };
+}
+
+function initPlayer(){
+  player={ x:W*0.2, y:H*0.5, vx:0, vy:0, size:42, targetSize:42, maxSize:85, minSize:20, emoji:"🐬", facingRight:true, wobble:0 };
+}
+
+function spawnFood(wordObj, isCorrect){
+  const side=Math.random()<0.5?"left":"right";
+  const x=side==="left"?-70:W+70;
+  const y=80+Math.random()*(H-220);
+  const spd=(levelConfig.speed+Math.random()*0.6)*(side==="left"?1:-1);
+  const styleIdx=Math.floor(Math.random()*BUBBLE_FILLS.length);
+  foodItems.push({ x,y,vx:spd,vy:(Math.random()-0.5)*0.9, word:wordObj.word, eng:wordObj.eng||"", pinyin:wordObj.pinyin||buildPinyin(wordObj.word), parentChar:wordObj.parentChar||"", parentPinyin:wordObj.parentPinyin||"", parentMeaning:wordObj.parentMeaning||"", isCorrect, emoji:FOOD_EMOJIS[Math.floor(Math.random()*FOOD_EMOJIS.length)], size:30+Math.random()*14, wobble:Math.random()*Math.PI*2, fill:BUBBLE_FILLS[styleIdx], stroke:BUBBLE_STROKES[styleIdx], opacity:1 });
+}
+
+function spawnRound(){
+  feedbackActive=false;
+  const all=getWordsForLevel(levelConfig);
+  currentChallenge=buildChallenge(all,all);
+  document.getElementById("target-char").textContent=currentChallenge.char;
+  document.getElementById("target-pinyin").textContent=currentChallenge.pinyin;
+  document.getElementById("target-meaning").textContent=currentChallenge.meaning;
+  document.getElementById("word-panel").style.display="block";
+  foodItems=[];
+  spawnFood(currentChallenge.correctPartner,true);
+  currentChallenge.distractors.forEach(d=>spawnFood(d,false));
+}
+
+function makeCard(cls,label,char,pinyin,meaning){
+  return '<div class="fp-card '+cls+'"><div class="fp-card-label">'+label+'</div><div class="fp-card-char">'+char+'</div><div class="fp-card-pinyin">'+pinyin+'</div>'+(meaning?'<div class="fp-card-meaning">'+meaning+'</div>':'')+'</div>';
+}
+
+function showFeedback(isCorrect, foodObj){
+  feedbackActive=true;
+  const pop=document.getElementById("feedback-popup");
+  pop.className=isCorrect?"correct":"wrong";
+  const eatenPinyin=lookupPinyin(foodObj.word);
+  const targetPinyin=currentChallenge.pinyin;
+  const targetChar=currentChallenge.char;
+  const targetMeaning=currentChallenge.meaning;
+  let cards="", rel="";
+
+  if(isCorrect){
+    document.getElementById("fp-result").textContent="✅ 正确！Correct!";
+    cards+=makeCard("target","Given character",targetChar,targetPinyin,targetMeaning);
+    cards+=makeCard("eaten correct-ans","✅ You ate",foodObj.word,eatenPinyin,foodObj.eng||"");
+    document.getElementById("fp-word-cards").innerHTML=cards;
+    const containsChar=foodObj.word.includes(targetChar);
+    if(containsChar){
+      rel="<strong>"+foodObj.word+"</strong> ("+eatenPinyin+") contains the character <strong>"+targetChar+"</strong> ("+targetPinyin+" · "+targetMeaning+"). Together they mean: <em>"+foodObj.eng+"</em>.";
+    } else {
+      rel="<strong>"+foodObj.word+"</strong> ("+eatenPinyin+") means <em>"+(foodObj.eng||"")+"</em> — a compound word using <strong>"+targetChar+"</strong> ("+targetPinyin+" · "+targetMeaning+").";
+    }
+  } else {
+    document.getElementById("fp-result").textContent="❌ 错误！Wrong!";
+    const correctWord=currentChallenge.correctPartner.word;
+    const correctPinyin=lookupPinyin(correctWord);
+    const correctEng=currentChallenge.correctPartner.eng||"";
+    cards+=makeCard("target","Given character",targetChar,targetPinyin,targetMeaning);
+    cards+=makeCard("eaten","❌ You ate",foodObj.word,eatenPinyin,foodObj.eng||"");
+    cards+=makeCard("correct-ans","✅ Correct answer",correctWord,correctPinyin,correctEng);
+    document.getElementById("fp-word-cards").innerHTML=cards;
+    if(foodObj.parentChar){
+      rel="<strong>"+foodObj.word+"</strong> ("+eatenPinyin+") belongs to <strong>"+foodObj.parentChar+"</strong> ("+foodObj.parentPinyin+"), not <strong>"+targetChar+"</strong> ("+targetPinyin+" · "+targetMeaning+").";
+    } else {
+      rel="<strong>"+foodObj.word+"</strong> ("+eatenPinyin+") is not a partner of <strong>"+targetChar+"</strong> ("+targetPinyin+" · "+targetMeaning+").";
+    }
+    rel+=" Correct partner: <strong>"+correctWord+"</strong> ("+correctPinyin+") — "+correctEng+".";
+  }
+  document.getElementById("fp-relation").innerHTML=rel;
+  pop.style.opacity="1";
+  setTimeout(()=>{ pop.style.opacity="0"; setTimeout(()=>{ feedbackActive=false; spawnRound(); },400); }, isCorrect?10000:12000);
+}
+
+function spawnBgBubbles(){
+  for(let i=0;i<16;i++) bubbles.push({ x:Math.random()*W, y:H+Math.random()*100, r:3+Math.random()*12, speed:0.3+Math.random()*0.8, wobble:Math.random()*Math.PI*2, opacity:0.08+Math.random()*0.18 });
+}
+function spawnParticles(x,y,correct){
+  const colors=correct?["#00ff88","#00e5cc","#ffb347","#ffffff"]:["#ff4444","#ff8800","#ffcc00"];
+  for(let i=0;i<16;i++){
+    const a=(i/16)*Math.PI*2, spd=2+Math.random()*4;
+    particles.push({ x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,color:colors[Math.floor(Math.random()*colors.length)],life:1,decay:0.04+Math.random()*0.03,r:3+Math.random()*4 });
+  }
+}
+
+function drawBg(){
+  const bg=levelConfig.bg;
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,bg[0]); g.addColorStop(0.5,bg[1]); g.addColorStop(1,bg[2]);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // Warm teal light shafts (distinct from Kabir's blue)
+  ctx.save(); ctx.globalAlpha=0.03;
+  for(let i=0;i<6;i++){
+    const rx=(i/6)*W+Math.sin(frameCount*0.004+i)*32;
+    ctx.fillStyle="#00e5cc";
+    ctx.beginPath(); ctx.moveTo(rx-20,0); ctx.lineTo(rx+20,0); ctx.lineTo(rx+60,H); ctx.lineTo(rx-60,H); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawBgBubbles(){
+  bubbles.forEach(b=>{
+    b.y-=b.speed; b.wobble+=0.04; b.x+=Math.sin(b.wobble)*0.35;
+    if(b.y<-20){b.y=H+20;b.x=Math.random()*W;}
+    ctx.save(); ctx.globalAlpha=b.opacity; ctx.strokeStyle="#00e5cc"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.stroke(); ctx.restore();
+  });
+}
+function drawPlayer(){
+  if(feedbackActive) return;
+  player.wobble+=0.08;
+  const dx=mouse.x-player.x, dy=mouse.y-player.y, dist=Math.sqrt(dx*dx+dy*dy);
+  if(dist>5){ player.vx+=(dx/dist)*0.55; player.vy+=(dy/dist)*0.55; }
+  player.vx*=0.87; player.vy*=0.87;
+  player.x+=player.vx; player.y+=player.vy;
+  player.x=Math.max(player.size,Math.min(W-player.size,player.x));
+  player.y=Math.max(player.size+60,Math.min(H-player.size-80,player.y));
+  player.facingRight=player.vx>0;
+  player.size+=(player.targetSize-player.size)*0.05;
+  ctx.save();
+  ctx.translate(player.x,player.y+Math.sin(player.wobble*0.55)*4);
+  if(!player.facingRight) ctx.scale(-1,1);
+  ctx.font=`${Math.round(player.size*1.7)}px serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText(player.emoji,0,0);
+  ctx.restore();
+  ctx.save(); ctx.globalAlpha=0.1; ctx.fillStyle="#00e5cc";
+  ctx.beginPath(); ctx.arc(player.x,player.y,player.size*1.3,0,Math.PI*2); ctx.fill(); ctx.restore();
+}
+function drawFood(){
+  foodItems.forEach(f=>{
+    f.wobble+=0.055; f.x+=f.vx; f.y+=f.vy+Math.sin(f.wobble)*0.45;
+    if(f.y<65) f.vy=Math.abs(f.vy);
+    if(f.y>H-70) f.vy=-Math.abs(f.vy);
+    ctx.save(); ctx.globalAlpha=f.opacity;
+    const R=f.size*1.55;
+    ctx.fillStyle=f.fill; ctx.beginPath(); ctx.arc(f.x,f.y,R,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=f.stroke; ctx.lineWidth=2.5; ctx.stroke();
+    ctx.fillStyle="rgba(255,255,255,0.07)"; ctx.beginPath();
+    ctx.arc(f.x-R*0.25,f.y-R*0.28,R*0.45,0,Math.PI*2); ctx.fill();
+    ctx.font=`${f.size}px serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(f.emoji,f.x,f.y-10);
+    ctx.font=`bold ${f.word.length>2?13:15}px Arial`;
+    ctx.fillStyle="#ffffff"; ctx.fillText(f.word,f.x,f.y+16);
+    ctx.restore();
+  });
+}
+function drawParticles(){
+  particles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.08; p.life-=p.decay;
+    ctx.save(); ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); ctx.restore();
+  });
+  particles=particles.filter(p=>p.life>0);
+}
+
+function checkCollisions(){
+  if(feedbackActive) return;
+  for(let i=foodItems.length-1;i>=0;i--){
+    const f=foodItems[i];
+    const dx=f.x-player.x, dy=f.y-player.y;
+    if(Math.sqrt(dx*dx+dy*dy)<player.size*0.75+f.size*0.9){
+      const correct=f.isCorrect;
+      spawnParticles(f.x,f.y,correct); foodItems.splice(i,1);
+      if(correct){
+        score+=10*(1+Math.floor(streak/3)); streak++; wordsCorrect++;
+        player.targetSize=Math.min(player.maxSize,player.targetSize+6);
+        document.getElementById("score-val").textContent=score;
+        updateSizeBar();
+        const k="lvl"+selectedLevel;
+        if(!highScores[k]||score>highScores[k]){ highScores[k]=score; localStorage.setItem("aryanHS",JSON.stringify(highScores)); }
+        if(streak>0&&streak%3===0) showStreak(streak);
+        if(wordsCorrect>=levelConfig.wordsNeeded){ showFeedback(true,f); setTimeout(()=>levelComplete(),10400); return; }
+        showFeedback(true,f);
+      } else {
+        streak=0; lives--;
+        player.targetSize=Math.max(player.minSize,player.targetSize-8);
+        updateLives(); updateSizeBar();
+        if(lives<=0){ showFeedback(false,f); setTimeout(()=>gameOver(),12400); return; }
+        showFeedback(false,f);
+      }
+      break;
+    }
+    if(f.x<-130||f.x>W+130){ foodItems.splice(i,1);
+      if(!feedbackActive&&foodItems.filter(fi=>fi.isCorrect).length===0) setTimeout(()=>spawnRound(),300);
+    }
+  }
+}
+
+function updateLives(){ document.getElementById("lives-val").textContent="❤️".repeat(lives)+"🖤".repeat(Math.max(0,3-lives)); }
+function updateSizeBar(){
+  const pct=((player.targetSize-player.minSize)/(player.maxSize-player.minSize))*100;
+  document.getElementById("size-bar").style.width=Math.max(2,pct)+"%";
+}
+function showStreak(n){ const el=document.getElementById("streak-notice"); document.getElementById("streak-num").textContent=n; el.style.opacity="1"; setTimeout(()=>el.style.opacity="0",1200); }
+
+function gameLoop(){
+  if(gameState!=="playing") return;
+  frameCount++;
+  ctx.clearRect(0,0,W,H);
+  drawBg(); drawBgBubbles(); drawFood(); drawPlayer(); drawParticles();
+  checkCollisions();
+  animFrame=requestAnimationFrame(gameLoop);
+}
+
+function selectLevel(n){
+  selectedLevel=n;
+  document.querySelectorAll(".lv-btn").forEach(b=>b.classList.remove("active"));
+  document.querySelector(`[data-level="${n}"]`).classList.add("active");
+  const cfg=LEVELS[n-1];
+  document.getElementById("creature-display").textContent=cfg.creature;
+  document.getElementById("overlay-msg").textContent=cfg.description;
+}
+
+function startGame(){
+  levelConfig=LEVELS[selectedLevel-1];
+  gameState="playing"; score=0; lives=3; streak=0; wordsCorrect=0;
+  foodItems=[]; bubbles=[]; particles=[]; feedbackActive=false;
+  document.getElementById("score-val").textContent="0";
+  document.getElementById("level-val").textContent=selectedLevel;
+  document.getElementById("feedback-popup").style.opacity="0";
+  updateLives();
+  document.getElementById("overlay").style.display="none";
+  document.getElementById("progress-label").style.display="none";
+  document.getElementById("progress-bar-wrap").style.display="none";
+  spawnBgBubbles(); initPlayer(); spawnRound();
+  if(animFrame) cancelAnimationFrame(animFrame);
+  gameLoop();
+}
+
+function levelComplete(){
+  gameState="levelcomplete"; cancelAnimationFrame(animFrame);
+  document.getElementById("word-panel").style.display="none";
+  foodItems=[]; document.getElementById("feedback-popup").style.opacity="0";
+  const dolphin=DOLPHINS[selectedLevel-1];
+  const isLast=selectedLevel===6;
+  const ol=document.getElementById("overlay"); ol.style.display="flex";
+  document.getElementById("creature-display").innerHTML='<span class="dolphin-reward">'+dolphin.emoji+'</span>';
+  document.getElementById("overlay-msg").innerHTML=
+    '<strong style="color:#ffb347">Level '+selectedLevel+' Complete!</strong><br>'+
+    'You unlocked the <strong>'+dolphin.name+'</strong>!<br>'+
+    '<em style="color:#7fffee">'+dolphin.fact+'</em><br><br>'+
+    'Score: <strong style="color:#ffb347">'+score+'</strong>';
+  document.getElementById("progress-label").style.display="block";
+  document.getElementById("progress-bar-wrap").style.display="block";
+  document.getElementById("progress-bar").style.width=(selectedLevel/6*100)+"%";
+  const ls=document.getElementById("level-select"); ls.innerHTML="";
+  if(!isLast){
+    const next=LEVELS[selectedLevel];
+    ls.innerHTML='<div style="color:#b2ffe8;font-size:14px;margin-bottom:8px">Next: '+next.creature+' '+next.name+'</div>';
+    const b1=document.createElement("button"); b1.className="big-btn"; b1.textContent="▶ Next Level!";
+    b1.onclick=()=>{ selectedLevel++; startGame(); }; ls.appendChild(b1);
+  } else { gameWin(); return; }
+  const b2=document.createElement("button"); b2.className="big-btn secondary"; b2.textContent="↩ Replay";
+  b2.onclick=()=>startGame(); ls.appendChild(b2);
+  const b3=document.createElement("button"); b3.className="big-btn secondary"; b3.textContent="🏠 Menu";
+  b3.onclick=()=>showMenu(); ls.appendChild(b3);
+}
+
+function gameWin(){
+  gameState="win";
+  document.getElementById("creature-display").innerHTML="🐬🐬🐬🐬🐬🐬";
+  document.getElementById("overlay-msg").innerHTML=
+    '<strong style="color:#ffb347;font-size:22px">🏆 DOLPHIN MASTER! 🏆</strong><br><br>'+
+    'You unlocked ALL 6 rare dolphins!<br>'+
+    'Bottlenose • Spinner • Spotted • Common • Orca • Pink River Dolphin<br><br>'+
+    '<strong style="color:#ffb347">Final Score: '+score+'</strong><br>'+
+    '<em style="color:#7fffee">Aryan is a P3 Chinese Champion! 加油！🐬</em>';
+  document.getElementById("level-select").innerHTML='<button class="big-btn" onclick="showMenu()">🏠 Play Again</button>';
+}
+
+function gameOver(){
+  gameState="gameover"; cancelAnimationFrame(animFrame);
+  document.getElementById("word-panel").style.display="none";
+  document.getElementById("feedback-popup").style.opacity="0";
+  const ol=document.getElementById("overlay"); ol.style.display="flex";
+  document.getElementById("creature-display").textContent="😢";
+  document.getElementById("overlay-msg").innerHTML=
+    'The dolphin got too small...<br>'+
+    'Score: <strong style="color:#ffb347">'+score+'</strong><br>'+
+    'Words mastered: <strong>'+wordsCorrect+'</strong> / '+levelConfig.wordsNeeded+'<br>'+
+    '<em style="color:#7fffee">加油！Try again Aryan!</em>';
+  document.getElementById("progress-label").style.display="none";
+  document.getElementById("progress-bar-wrap").style.display="none";
+  document.getElementById("level-select").innerHTML=
+    '<button class="big-btn" onclick="startGame()">↩ Try Again</button>'+
+    '<button class="big-btn secondary" onclick="showMenu()">🏠 Menu</button>';
+}
+
+function showMenu(){
+  gameState="menu"; cancelAnimationFrame(animFrame);
+  foodItems=[]; particles=[];
+  document.getElementById("word-panel").style.display="none";
+  document.getElementById("feedback-popup").style.opacity="0";
+  document.getElementById("progress-label").style.display="none";
+  document.getElementById("progress-bar-wrap").style.display="none";
+  const ol=document.getElementById("overlay"); ol.style.display="flex";
+  document.getElementById("creature-display").textContent="🐬";
+  document.getElementById("overlay-msg").textContent="Swim as Aryan's dolphin! Find the partner word that matches the character below. All bubbles look the same — think carefully!";
+  document.getElementById("level-select").innerHTML=
+    '<div class="lv-btn active" data-level="1" onclick="selectLevel(1)">🐬 Level 1<br><small>P1 Basics</small></div>'+
+    '<div class="lv-btn" data-level="2" onclick="selectLevel(2)">🐠 Level 2<br><small>P1 Advanced</small></div>'+
+    '<div class="lv-btn" data-level="3" onclick="selectLevel(3)">🦀 Level 3<br><small>P2 Basics</small></div>'+
+    '<div class="lv-btn" data-level="4" onclick="selectLevel(4)">🐙 Level 4<br><small>P2 Advanced</small></div>'+
+    '<div class="lv-btn" data-level="5" onclick="selectLevel(5)">🦑 Level 5<br><small>P3 Basics</small></div>'+
+    '<div class="lv-btn" data-level="6" onclick="selectLevel(6)">🌟 Level 6<br><small>P3 Master</small></div>';
+  let hsHtml="", any=false;
+  for(let i=1;i<=6;i++){ const k="lvl"+i; if(highScores[k]){hsHtml+="L"+i+":"+highScores[k]+"  ";any=true;} }
+  document.getElementById("high-score-display").textContent=any?"🏆 Best: "+hsHtml:"";
+  levelConfig=LEVELS[0]; spawnBgBubbles();
+  function bgLoop(){ if(gameState!=="menu") return; ctx.clearRect(0,0,W,H); drawBg(); drawBgBubbles(); requestAnimationFrame(bgLoop); }
+  bgLoop();
+}
+
+selectLevel(1);
+showMenu();
+</script>
+</body>
+</html>
